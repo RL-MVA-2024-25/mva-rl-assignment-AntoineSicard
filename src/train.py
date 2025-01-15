@@ -3,10 +3,10 @@ from env_hiv import HIVPatient
 import numpy as np
 import os
 from tqdm import tqdm
-from xgboost import XGBRegressor, Booster
+from xgboost import XGBRegressor
 import zstandard as zstd
-import xgboost as xgb
-
+import pickle
+from evaluate import evaluate_HIV, evaluate_HIV_population
 
 env = TimeLimit(
     env=HIVPatient(domain_randomization=False), max_episode_steps=200
@@ -18,6 +18,10 @@ env = TimeLimit(
 # Don't modify the methods names and signatures, but you can add methods.
 # ENJOY!
 
+# I tried many configurations using DQN and FIQ (based on class number 4). I played a lot with hypermarameters doing a lot of grid search and optimization.
+# The best results I got are with the following configuration.
+# The code should run well. In any case, don't hesitate to contact me to get more information or to help you to run the code.
+ 
 config = {"horizon": 600000, "max_episode": 150, "gamma": 0.97, "n_estimators": 650, "max_depth": 15}
 class ProjectAgent:
     def __init__(self, config=config, env=env):
@@ -65,10 +69,13 @@ class ProjectAgent:
     
 
     def rf_fqi(self, S, A, R, S2, D, iterations, nb_actions, gamma, disable_tqdm=False):
-        nb_samples = S.shape[0]
-        Qfunctions = []
+        #I initialize the scores to 0 
         indiv_test = 0
         pop_test = 0
+
+        nb_samples = S.shape[0]
+        Qfunctions = []
+
         SA = np.append(S,A,axis=1)
         for iter in tqdm(range(iterations), disable=disable_tqdm):
             if iter==0:
@@ -88,13 +95,13 @@ class ProjectAgent:
             Qfunctions.append(Q)
 
                 
-            if iter % 10 == 0:
+            if iter % 5 == 0:
                 print(f" Iteration {iter}: Evaluating the model .......")
                 current_indiv_score = evaluate_HIV(agent=self, nb_episode=5)
                 current_pop_score = evaluate_HIV_population(agent=self, nb_episode=20)
                 print(f"Scores are for individual: {current_indiv_score}, population: {current_pop_score}")
 
-                # We check the scores and update the best model
+                #I check the new scores and update the best model
                 if current_indiv_score > indiv_test:
                     indiv_test = current_indiv_score
                     self.save()
@@ -115,75 +122,65 @@ class ProjectAgent:
         self.Qfunctions = self.rf_fqi(S, A, R, S2, D, self.max_episode, nb_actions, self.gamma, disable_tqdm)
         self.model = self.Qfunctions[-1]
         return self.model
-    
-    def greedy_action(self, Q, s, nb_actions):
+
+    def greedy_action(self, Q,s,nb_actions):
         Qsa = []
         for a in range(nb_actions):
-            sa = np.hstack((s.reshape(1, -1), [[a]])).reshape(1, -1)
-            dmatrix_sa = xgb.DMatrix(sa)
-            Qsa.append(Q.predict(dmatrix_sa).item())
+            sa = np.append(s,a).reshape(1, -1)
+            Qsa.append(Q.predict(sa))
         return np.argmax(Qsa)
 
+    # def greedy_action(self, Q, s, nb_actions):
+    #     Qsa = []
+    #     for a in range(nb_actions):
+    #         sa = np.hstack((s.reshape(1, -1), [[a]])).reshape(1, -1)
+    #         Qsa.append(Q.predict(sa).item())
+    #     return np.argmax(Qsa)
+    
     def act(self, observation, use_random=False):
         if use_random:
             return self.env.action_space.sample()
         else:
             return self.greedy_action(self.model, observation, self.env.action_space.n)
 
-#We save and load the model using json and zstd to save space (with pickle it was too big, we adpated the methods)
+#I save and load the model using zstd compression to save space (with only pickle it was too big, I adpated the methods)
 
-    def save(self, path="./Model.json.zst"):
+    def save(self, path="./Models/Model.pkl.zst"):
         os.makedirs(os.path.dirname(path), exist_ok=True)
-
-        #temporary saving
-        temp_json_path = "./temp_model.json"
-        self.model.save_model(temp_json_path)
-        print(f"Model saved temporarily to {temp_json_path} (JSON format).")
-
-        #Compression
-        try:
-            print(f"Compressing model to {path}...")
-            with open(temp_json_path, 'rb') as f_in, open(path, 'wb') as f_out:
-                cctx = zstd.ZstdCompressor(level=19)
-                f_out.write(cctx.compress(f_in.read()))
-            print(f"Model compressed and saved to {path}.")
-        except Exception as e:
-            print(f"Error during compression: {e}")
-        finally:
-            #get rid of the temporary file
-            if os.path.exists(temp_json_path):
-                os.remove(temp_json_path)
-
+        temp_model_path = "./tempoarary_model.pkl"
+        with open(temp_model_path, "wb") as f:
+            pickle.dump(self.model, f)
+        with open(temp_model_path, "rb") as f_in, open(path, "wb") as f_out:
+            compressor = zstd.ZstdCompressor(level=19)
+            f_out.write(compressor.compress(f_in.read()))
+            print("Model saved in a compressed format")
+        if os.path.exists(temp_model_path):
+            os.remove(temp_model_path)
 
     def load(self):
-        path="./Model.json.zst"
+        path="./Model.pkl.zst"
         if not os.path.exists(path):
-            print(f"No model found at {path}.")
+            print(f"No model found at the path {path}.")
             self.model = None
             return
-
-        #Decompression
-        temp_json_path = "./temp_model.json"
+        temp_model_path = "./tempoarary_model.pkl"
         try:
-            print(f"Decompressing model from the path {path}...")
-            with open(path, 'rb') as f_in, open(temp_json_path, 'wb') as f_out:
-                dctx = zstd.ZstdDecompressor()
-                f_out.write(dctx.decompress(f_in.read()))
-            print(f"Model decompressed to {temp_json_path}.")
-        except Exception as e:
-            print(f"Error during decompression: {e}")
-            self.model = None
-            return
+            #I decrompress the file
+            with open(path, "rb") as f_in, open(temp_model_path, "wb") as f_out:
+                decompressor = zstd.ZstdDecompressor()
+                f_out.write(decompressor.decompress(f_in.read()))
 
-        #Loading part
-        try:
-            self.model = Booster()
-            self.model.load_model(temp_json_path)
-            print(f"Model loaded from decompressed JSON at {temp_json_path}.")
+            #I load the decompressed model
+            with open(temp_model_path, "rb") as f:
+                self.model = pickle.load(f)
+
+            print("Model loaded successfully.")
+
         except Exception as e:
-            print(f"Error during model loading: {e}")
+            print(f"An error occurred during model loading: {e}")
             self.model = None
+
         finally:
-            #Remove temporary file
-            if os.path.exists(temp_json_path):
-                os.remove(temp_json_path)
+            #I remove the temporary file
+            if os.path.exists(temp_model_path):
+                os.remove(temp_model_path)
