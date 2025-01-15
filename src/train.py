@@ -19,8 +19,8 @@ parameters = {"horizon": 600000, "max_episode": 150, "gamma": 0.97, "n_estimator
 # Don't modify the methods names and signatures, but you can add methods.
 # ENJOY!
 
-# I tried many configurations using DQN and FIQ (based on the work I did for class number 4). I played a lot with hypermarameters doing a lot of grid search and optimization.
-# The best results I got are with the following configuration (FIQ algorithm), with DQN or DDQN I neved managed to pass the third test. (I just put here the most promising
+# I tried many configurations using DQN and FQI (based on the work I did for class number 4). I played a lot with hypermarameters doing a lot of grid search and optimization.
+# The best results I got are with the following configuration (FQI algorithm), with DQN or DDQN I neved managed to pass the third test. (I just put here the most promising
 # not to be too heavy).
 # The code should run well. In any case, don't hesitate to contact me to get more information or to help you to run the code.
 # I also put the learning rate to 0.05 (see below). I used XGBRegressor rather than RandomForestRegressor.
