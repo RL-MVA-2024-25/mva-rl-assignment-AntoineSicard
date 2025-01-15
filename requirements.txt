@@ -5,5 +5,4 @@ scikit-learn>=1.4.0
 pytest
 xgboost>=1.6.0
 tqdm>=4.64.0
-python>=3.9
 zstandard>=0.15.2
