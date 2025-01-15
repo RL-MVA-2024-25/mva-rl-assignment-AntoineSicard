@@ -13,6 +13,7 @@ env = TimeLimit(
 )  # The time wrapper limits the number of steps in an episode at 200.
 # Now is the floor is yours to implement the agent and train it.
 
+parameters = {"horizon": 600000, "max_episode": 150, "gamma": 0.97, "n_estimators": 650, "max_depth": 15}
 
 # You have to implement your own agent.
 # Don't modify the methods names and signatures, but you can add methods.
@@ -24,9 +25,8 @@ env = TimeLimit(
 # The code should run well. In any case, don't hesitate to contact me to get more information or to help you to run the code.
 # I also put the learning rate to 0.05 (see below). I used XGBRegressor rather than RandomForestRegressor.
  
-config = {"horizon": 600000, "max_episode": 150, "gamma": 0.97, "n_estimators": 650, "max_depth": 15}
 class ProjectAgent:
-    def __init__(self, config=config, env=env):
+    def __init__(self, config=parameters, env=env):
         
         #Hyperparameters
         self.horizon = config["horizon"]
